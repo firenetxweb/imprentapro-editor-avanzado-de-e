@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImprentaPro - Editor Avanzado de Etiquetas y Plantillas PDF</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- jsPDF for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .checkerboard {
+            background-image: linear-gradient(45deg, #f3f4f6 25%, transparent 25%), 
+                              linear-gradient(-45deg, #f3f4f6 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #f3f4f6 75%), 
+                              linear-gradient(-45deg, transparent 75%, #f3f4f6 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .sidebar-transition {
+            transition: width 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-full flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between shrink-0 shadow-md z-20">
+        <div class="flex items-center space-x-3">
+            <button onclick="app.toggleSidebar()" id="sidebarToggleBtn" class="bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white p-2 rounded-lg text-sm transition flex items-center justify-center cursor-pointer">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="bg-blue-600 text-white p-2 rounded-lg shadow flex items-center justify-center">
+                <i class="fa-solid fa-print text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base sm:text-lg tracking-wide text-white">ImprentaPro <span class="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full ml-1 sm:ml-2">v2.8.6</span></h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Editor interactivo: Arrastre fluido y control por flechas</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2 sm:space-x-3">
+            <button onclick="app.showInfoModal()" class="text-slate-400 hover:text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm bg-slate-700/50 hover:bg-slate-700 transition flex items-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-circle-question"></i> <span class="hidden sm:inline">Guía Rápida</span>
+            </button>
+            <button onclick="app.exportPDF()" id="exportBtn" disabled class="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm shadow transition flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed">
+                <i class="fa-solid fa-file-pdf"></i> <span class="hidden sm:inline">Generar y Descargar</span> PDF
+            </button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Sidebar Controls -->
+        <aside id="mainSidebar" class="w-80 sm:w-96 bg-slate-800 border-r border-slate-700 flex flex-col shrink-0 z-20 sidebar-transition absolute md:relative h-full inset-y-0 left-0 -translate-x-full md:translate-x-0 shadow-2xl md:shadow-none overflow-hidden">
+            
+            <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-slate-900/60 md:hidden">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Panel de Controles</span>
+                <button onclick="app.toggleSidebar()" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div class="flex border-b border-slate-700 bg-slate-900/50 min-w-[320px]">
+                <button onclick="app.switchTab('upload')" id="tab-upload" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-blue-400 border-b-2 border-blue-500 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> 1. Imagen
+                </button>
+                <button onclick="app.switchTab('grid')" id="tab-grid" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center justify-center gap-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-table-cells"></i> 2. Matriz
+                </button>
+                <button onclick="app.switchTab('manual')" id="tab-manual" class="flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center justify-center gap-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-hand-pointer"></i> 3. Manual
+                </button>
+            </div>
+
+            <!-- Tabs Content Container -->
+            <div class="flex-1 overflow-y-auto p-5 space-y-6 min-w-[320px]">
+                
+                <!-- TAB 1: UPLOAD & ENHANCEMENT -->
+                <div id="panel-upload" class="space-y-6">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Archivo de Imagen (PNG, JPG, WEBP)</label>
+                        <div id="dropZone" class="border-2 border-dashed border-slate-600 hover:border-blue-500 rounded-xl p-6 text-center cursor-pointer bg-slate-900/40 hover:bg-slate-900/80 transition flex flex-col items-center justify-center">
+                            <i class="fa-solid fa-image text-3xl text-blue-400 mb-2"></i>
+                            <span class="text-sm font-medium text-slate-200">Arrastra tu diseño aquí o <span class="text-blue-400 underline">examina</span></span>
+                            <span class="text-xs text-slate-500 mt-1">Soporta alta resolución para impresión</span>
+                            <input type="file" id="imageInput" accept="image/*" class="hidden">
+                        </div>
+                    </div>
+
+                    <!-- Enhancement Controls -->
+                    <div id="enhancementSection" class="space-y-4 opacity-50 pointer-events-none transition">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                <i class="fa-solid fa-wand-magic-sparkles text-blue-400"></i> Procesamiento y Nitidez
+                            </h3>
+                            <button onclick="app.resetFilters()" class="text-xs text-slate-400 hover:text-white underline cursor-pointer">Restablecer</button>
+                        </div>
+
+                        <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-2">
+                            <div class="flex justify-between text-xs font-medium">
+                                <span class="text-slate-300">Filtro Nitidez / Bordes</span>
+                                <span id="sharpnessVal" class="text-blue-400">0%</span>
+                            </div>
+                            <input type="range" id="sharpnessRange" min="0" max="100" value="0" class="w-full accent-blue-500 cursor-pointer">
+                        </div>
+
+                        <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-2">
+                            <div class="flex justify-between text-xs font-medium">
+                                <span class="text-slate-300">Suavizado Anti-Pixelado</span>
+                                <span id="smoothVal" class="text-blue-400">0%</span>
+                            </div>
+                            <input type="range" id="smoothRange" min="0" max="100" value="0" class="w-full accent-blue-500 cursor-pointer">
+                        </div>
+
+                        <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60 space-y-2">
+                            <div class="flex justify-between text-xs font-medium">
+                                <span class="text-slate-300">Contraste Dinámico</span>
+                                <span id="contrastVal" class="text-blue-400">100%</span>
+                            </div>
+                            <input type="range" id="contrastRange" min="50" max="150" value="100" class="w-full accent-blue-500 cursor-pointer">
+                        </div>
+
+                        <div class="flex items-center justify-between bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60">
+                            <div>
+                                <span class="text-xs font-medium text-slate-200 block">Modo Blanco y Negro Puro</span>
+                                <span class="text-[11px] text-slate-500">Ideal para sellos o vinilos</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="bwToggle" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <button onclick="app.switchTab('grid')" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg text-sm transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                            Continuar a Plantilla <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TAB 2: SHEET & GRID CONFIG -->
+                <div id="panel-grid" class="space-y-6 hidden">
+                    <div class="space-y-3">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Tamaño de Hoja / Papel</label>
+                        <select id="sheetPreset" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer">
+                            <option value="letter">Carta (Letter) - 21.59 x 27.94 cm</option>
+                            <option value="legal">Oficio (Legal) - 21.59 x 35.56 cm</option>
+                            <option value="a4">A4 - 21.0 x 29.7 cm</option>
+                            <option value="tabloid">Tabloide - 27.94 x 43.18 cm</option>
+                            <option value="custom">Personalizado (Custom)</option>
+                        </select>
+
+                        <div id="customSheetBox" class="grid grid-cols-2 gap-3 pt-2 hidden">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Ancho (cm)</label>
+                                <input type="number" id="customSheetW" value="21.59" min="5" max="100" step="0.01" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Alto (cm)</label>
+                                <input type="number" id="customSheetH" value="27.94" min="5" max="100" step="0.01" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <span class="text-xs text-slate-400">Orientación:</span>
+                            <div class="flex bg-slate-900 p-1 rounded-lg border border-slate-700">
+                                <button onclick="app.setOrientation('portrait')" id="orientPortrait" class="px-3 py-1 text-xs rounded bg-blue-600 text-white font-medium transition cursor-pointer">Vertical</button>
+                                <button onclick="app.setOrientation('landscape')" id="orientLandscape" class="px-3 py-1 text-xs rounded text-slate-400 hover:text-white transition cursor-pointer">Horizontal</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 pt-2 border-t border-slate-700">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Dimensiones de la Etiqueta Base</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Ancho (cm)</label>
+                                <input type="number" id="itemWidth" value="5" min="0.5" max="50" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Alto (cm)</label>
+                                <input type="number" id="itemHeight" value="5" min="0.5" max="50" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-slate-400">Mantener proporción:</span>
+                            <input type="checkbox" id="lockAspect" checked class="accent-blue-500 w-4 h-4 cursor-pointer">
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 pt-2 border-t border-slate-700">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Matriz Automática</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Margen (cm)</label>
+                                <input type="number" id="marginSheet" value="1" min="0" max="10" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Separación / Gap (cm)</label>
+                                <input type="number" id="itemGap" value="0.3" min="0" max="5" step="0.1" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-200">
+                            </div>
+                        </div>
+                        <button onclick="app.generateGrid()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow">
+                            <i class="fa-solid fa-rotate"></i> Regenerar Matriz Automática
+                        </button>
+                    </div>
+
+                    <div class="space-y-3 pt-2 border-t border-slate-700">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Guías de Impresión</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" id="showCropMarks" checked class="accent-blue-500 w-4 h-4"> Incluir marcas de corte
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" id="showBorder" class="accent-blue-500 w-4 h-4"> Dibujar línea de troquel
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bg-blue-950/40 border border-blue-800/40 rounded-xl p-3.5 text-xs space-y-1.5 text-blue-200">
+                        <div class="flex justify-between">
+                            <span>Ítems Activos en Hoja:</span>
+                            <span id="statCount" class="font-bold text-white">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: MANUAL & INTERACTIVE TOOLS -->
+                <div id="panel-manual" class="space-y-6 hidden">
+                    <div class="bg-blue-950/30 border border-blue-800/50 rounded-xl p-3 text-xs text-blue-200 space-y-1">
+                        <p class="font-bold text-white flex items-center gap-1.5"><i class="fa-solid fa-circle-info text-blue-400"></i> Editor Manual y Flechas:</p>
+                        <p>Selecciona una etiqueta para moverla con las flechas direccionales con precisión milimétrica, arrástrala libremente con el ratón o añade más etiquetas para acomodarlas.</p>
+                    </div>
+
+                    <!-- Selected Item Properties -->
+                    <div id="selectedItemControls" class="bg-slate-900/70 border border-slate-700 rounded-xl p-4 space-y-4 opacity-50 pointer-events-none">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
+                            <i class="fa-solid fa-sliders"></i> Propiedades del Ítem Seleccionado
+                        </h3>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Posición X (cm)</label>
+                                <input type="number" id="selX" step="0.1" class="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Posición Y (cm)</label>
+                                <input type="number" id="selY" step="0.1" class="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-white">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Ancho (cm)</label>
+                                <input type="number" id="selW" step="0.1" min="0.5" class="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Alto (cm)</label>
+                                <input type="number" id="selH" step="0.1" min="0.5" class="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-white">
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between text-xs">
+                                <span class="text-slate-400">Rotación:</span>
+                                <span id="selRotVal" class="text-blue-400">0°</span>
+                            </div>
+                            <input type="range" id="selRotation" min="0" max="360" value="0" class="w-full accent-blue-500 cursor-pointer">
+                        </div>
+
+                        <!-- Directional Movement Arrows & Step Selector -->
+                        <div class="space-y-2 pt-2 border-t border-slate-800">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-[11px] text-slate-400 font-medium">Mover con Flechas</label>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[10px] text-slate-500">Paso:</span>
+                                    <select id="moveStep" class="bg-slate-950 border border-slate-700 rounded text-[11px] text-blue-400 px-2 py-0.5 cursor-pointer focus:outline-none">
+                                        <option value="0.1">0.1 cm</option>
+                                        <option value="0.5">0.5 cm</option>
+                                        <option value="1.0">1.0 cm</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col items-center gap-1.5 pt-1">
+                                <button onclick="app.moveSelectedDirection('up')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded text-xs transition flex items-center justify-center gap-1.5 cursor-pointer w-full shadow-sm">
+                                    <i class="fa-solid fa-arrow-up text-blue-400"></i> Mover Arriba
+                                </button>
+                                <div class="grid grid-cols-2 gap-1.5 w-full">
+                                    <button onclick="app.moveSelectedDirection('left')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 rounded text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                                        <i class="fa-solid fa-arrow-left text-blue-400"></i> Izquierda
+                                    </button>
+                                    <button onclick="app.moveSelectedDirection('right')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 rounded text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                                        Derecha <i class="fa-solid fa-arrow-right text-blue-400"></i>
+                                    </button>
+                                </div>
+                                <button onclick="app.moveSelectedDirection('down')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded text-xs transition flex items-center justify-center gap-1.5 cursor-pointer w-full shadow-sm">
+                                    <i class="fa-solid fa-arrow-down text-blue-400"></i> Mover Abajo
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
+                            <button onclick="app.rotateSelected(90)" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 rounded flex flex-col items-center gap-1 transition cursor-pointer">
+                                <i class="fa-solid fa-rotate-right text-blue-400"></i> Girar 90°
+                            </button>
+                            <button onclick="app.cloneSelected()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 rounded flex flex-col items-center gap-1 transition cursor-pointer">
+                                <i class="fa-solid fa-copy text-emerald-400"></i> Clonar
+                            </button>
+                            <button onclick="app.deleteSelected()" class="bg-red-950/60 hover:bg-red-900 text-red-200 text-xs py-2 rounded flex flex-col items-center gap-1 transition border border-red-800/50 cursor-pointer">
+                                <i class="fa-solid fa-trash text-red-400"></i> Eliminar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- General Manual Actions -->
+                    <div class="space-y-2 pt-2 border-t border-slate-700">
+                        <button onclick="app.addSingleItem()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-lg text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow">
+                            <i class="fa-solid fa-plus"></i> Añadir Nueva Etiqueta al Centro
+                        </button>
+                        <button onclick="app.clearAllItems()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 rounded-lg text-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="fa-solid fa-broom"></i> Limpiar Toda la Hoja
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Main Preview Workspace -->
+        <main class="flex-1 bg-slate-950 flex flex-col relative overflow-hidden">
+            <div class="bg-slate-900/80 border-b border-slate-800 px-4 sm:px-6 py-2.5 flex items-center justify-between z-10">
+                <div class="flex items-center space-x-3 text-xs text-slate-300">
+                    <button onclick="app.toggleSidebar()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded text-xs transition flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-columns"></i> <span id="toggleSidebarText">Ocultar Panel</span>
+                    </button>
+                    <span id="canvasInfoText" class="font-medium truncate max-w-[150px] sm:max-w-xs">Ninguna imagen cargada</span>
+                    <span id="sheetDimInfo" class="text-slate-500 hidden sm:inline">|</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="app.zoomOut()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs transition cursor-pointer"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <span id="zoomLevel" class="text-xs font-medium text-slate-400 w-12 text-center">100%</span>
+                    <button onclick="app.zoomIn()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs transition cursor-pointer"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button onclick="app.resetZoom()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded text-xs transition ml-1 cursor-pointer">Ajustar</button>
+                </div>
+            </div>
+
+            <!-- Canvas Viewport -->
+            <div id="viewport" class="flex-1 overflow-auto checkerboard flex items-center justify-center p-6 sm:p-16 relative select-none">
+                <div id="sheetContainer" class="bg-white shadow-2xl relative origin-center flex items-center justify-center m-auto">
+                    <div id="emptyState" class="text-center p-8 sm:p-12 text-slate-400 max-w-sm">
+                        <i class="fa-solid fa-layer-group text-5xl mb-3 text-slate-300"></i>
+                        <h3 class="font-bold text-slate-700 text-base mb-1">Comienza subiendo tu imagen</h3>
+                        <p class="text-xs text-slate-500">Sube tu diseño para distribuirlo automáticamente o muévelo con precisión con los botones y el ratón.</p>
+                    </div>
+                    <canvas id="renderCanvas" class="hidden"></canvas>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-lg text-white flex items-center gap-2">
+                    <i class="fa-solid fa-circle-question text-blue-500"></i> Guía de Edición y Flechas
+                </h3>
+                <button onclick="app.closeInfoModal()" class="text-slate-400 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3 text-sm text-slate-300">
+                <p><strong>1. Botones de Flechas:</strong> Al seleccionar una etiqueta, usa los botones de Arriba, Abajo, Izquierda y Derecha (y el paso ajustable) para acomodarla milimétricamente en la hoja.</p>
+                <p><strong>2. Arrastre Libre:</strong> También puedes hacer clic y arrastrar cualquier etiqueta directamente en la pantalla con el ratón.</p>
+                <p><strong>3. Agregar y Acomodar:</strong> Añade nuevas etiquetas desde el botón central, clónalas o elimínalas para aprovechar al máximo tu espacio de impresión.</p>
+            </div>
+            <div class="pt-3 flex justify-end">
+                <button onclick="app.closeInfoModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition cursor-pointer">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ImprentaApp {
+            constructor() {
+                this.imageObj = null;
+                this.originalCanvas = document.createElement('canvas');
+                this.processedCanvas = document.createElement('canvas');
+                this.zoom = 1;
+                this.orientation = 'portrait';
+                this.sidebarOpen = true;
+                
+                this.items = [];
+                this.selectedItemIndex = -1;
+                this.isDragging = false;
+                this.dragStartX = 0;
+                this.dragStartY = 0;
+
+                this.presets = {
+                    letter: { w: 21.59, h: 27.94 },
+                    legal: { w: 21.59, h: 35.56 },
+                    a4: { w: 21.00, h: 29.70 },
+                    tabloid: { w: 27.94, h: 43.18 }
+                };
+
+                this.initListeners();
+            }
+
+            initListeners() {
+                const dropZone = document.getElementById('dropZone');
+                const imageInput = document.getElementById('imageInput');
+
+                dropZone.addEventListener('click', () => imageInput.click());
+                dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-slate-900'); });
+                dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-blue-500', 'bg-slate-900'); });
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-blue-500', 'bg-slate-900');
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        this.loadImageFile(e.dataTransfer.files[0]);
+                    }
+                });
+
+                imageInput.addEventListener('change', (e) => {
+                    if (e.target.files && e.target.files[0]) {
+                        this.loadImageFile(e.target.files[0]);
+                    }
+                });
+
+                const triggerProcess = () => { if (this.imageObj) { this.processImage(); this.redrawCanvas(); } };
+
+                document.getElementById('sharpnessRange').addEventListener('input', (e) => {
+                    document.getElementById('sharpnessVal').innerText = e.target.value + '%';
+                    triggerProcess();
+                });
+                document.getElementById('smoothRange').addEventListener('input', (e) => {
+                    document.getElementById('smoothVal').innerText = e.target.value + '%';
+                    triggerProcess();
+                });
+                document.getElementById('contrastRange').addEventListener('input', (e) => {
+                    document.getElementById('contrastVal').innerText = e.target.value + '%';
+                    triggerProcess();
+                });
+                document.getElementById('bwToggle').addEventListener('change', triggerProcess);
+
+                document.getElementById('sheetPreset').addEventListener('change', (e) => {
+                    const customBox = document.getElementById('customSheetBox');
+                    if (e.target.value === 'custom') {
+                        customBox.classList.remove('hidden');
+                    } else {
+                        customBox.classList.add('hidden');
+                        const sz = this.presets[e.target.value];
+                        if (this.orientation === 'portrait') {
+                            document.getElementById('customSheetW').value = sz.w;
+                            document.getElementById('customSheetH').value = sz.h;
+                        } else {
+                            document.getElementById('customSheetW').value = sz.h;
+                            document.getElementById('customSheetH').value = sz.w;
+                        }
+                    }
+                    this.redrawCanvas();
+                });
+
+                ['customSheetW', 'customSheetH', 'showCropMarks', 'showBorder'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', () => this.redrawCanvas());
+                });
+
+                document.getElementById('lockAspect').addEventListener('change', () => {
+                    if (document.getElementById('lockAspect').checked && this.imageObj) {
+                        const iw = parseFloat(document.getElementById('itemWidth').value);
+                        const ratio = this.imageObj.height / this.imageObj.width;
+                        document.getElementById('itemHeight').value = Math.round(iw * ratio * 100) / 100;
+                    }
+                });
+
+                document.getElementById('itemWidth').addEventListener('input', () => {
+                    if (document.getElementById('lockAspect').checked && this.imageObj) {
+                        const iw = parseFloat(document.getElementById('itemWidth').value);
+                        const ratio = this.imageObj.height / this.imageObj.width;
+                        document.getElementById('itemHeight').value = Math.round(iw * ratio * 100) / 100;
+                    }
+                });
+
+                ['selX', 'selY', 'selW', 'selH'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', (e) => {
+                        if (this.selectedItemIndex !== -1 && this.items[this.selectedItemIndex]) {
+                            const val = parseFloat(e.target.value) || 0;
+                            if (id === 'selX') this.items[this.selectedItemIndex].x = val;
+                            if (id === 'selY') this.items[this.selectedItemIndex].y = val;
+                            if (id === 'selW') this.items[this.selectedItemIndex].w = val;
+                            if (id === 'selH') this.items[this.selectedItemIndex].h = val;
+                            this.redrawCanvas();
+                        }
+                    });
+                });
+
+                document.getElementById('selRotation').addEventListener('input', (e) => {
+                    const rot = parseInt(e.target.value) || 0;
+                    document.getElementById('selRotVal').innerText = rot + '°';
+                    if (this.selectedItemIndex !== -1 && this.items[this.selectedItemIndex]) {
+                        this.items[this.selectedItemIndex].rotation = rot;
+                        this.redrawCanvas();
+                    }
+                });
+
+                // Keyboard arrow support for selected item
+                window.addEventListener('keydown', (e) => {
+                    if (this.selectedItemIndex === -1 || !this.items[this.selectedItemIndex]) return;
+                    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+                    const step = parseFloat(document.getElementById('moveStep').value) || 0.1;
+                    let item = this.items[this.selectedItemIndex];
+
+                    if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        item.y = Math.max(0, Math.round((item.y - step) * 100) / 100);
+                        this.updateSelectedItemUI();
+                        this.redrawCanvas();
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        item.y = Math.round((item.y + step) * 100) / 100;
+                        this.updateSelectedItemUI();
+                        this.redrawCanvas();
+                    } else if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        item.x = Math.max(0, Math.round((item.x - step) * 100) / 100);
+                        this.updateSelectedItemUI();
+                        this.redrawCanvas();
+                    } else if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        item.x = Math.round((item.x + step) * 100) / 100;
+                        this.updateSelectedItemUI();
+                        this.redrawCanvas();
+                    }
+                });
+
+                // Canvas Mouse Interactions for Fluid Label Dragging
+                const canvas = document.getElementById('renderCanvas');
+                const pxPerCm = 37.795;
+
+                canvas.addEventListener('mousedown', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    const canvasX = canvas.width / 2 + (e.clientX - centerX) / this.zoom;
+                    const canvasY = canvas.height / 2 + (e.clientY - centerY) / this.zoom;
+
+                    const mouseX_cm = canvasX / pxPerCm;
+                    const mouseY_cm = canvasY / pxPerCm;
+
+                    let clickedIndex = -1;
+                    for (let i = this.items.length - 1; i >= 0; i--) {
+                        const it = this.items[i];
+                        if (mouseX_cm >= it.x && mouseX_cm <= it.x + it.w &&
+                            mouseY_cm >= it.y && mouseY_cm <= it.y + it.h) {
+                            clickedIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (clickedIndex !== -1) {
+                        const item = this.items.splice(clickedIndex, 1)[0];
+                        this.items.push(item);
+                        this.selectedItemIndex = this.items.length - 1;
+
+                        this.isDragging = true;
+                        this.dragStartX = mouseX_cm - item.x;
+                        this.dragStartY = mouseY_cm - item.y;
+                        this.updateSelectedItemUI();
+                        canvas.style.cursor = 'grabbing';
+                    } else {
+                        this.selectedItemIndex = -1;
+                        document.getElementById('selectedItemControls').classList.add('opacity-50', 'pointer-events-none');
+                    }
+                    this.redrawCanvas();
+                });
+
+                canvas.addEventListener('mousemove', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    const canvasX = canvas.width / 2 + (e.clientX - centerX) / this.zoom;
+                    const canvasY = canvas.height / 2 + (e.clientY - centerY) / this.zoom;
+
+                    const mouseX_cm = canvasX / pxPerCm;
+                    const mouseY_cm = canvasY / pxPerCm;
+
+                    if (!this.isDragging) {
+                        let hovered = false;
+                        for (let i = this.items.length - 1; i >= 0; i--) {
+                            const it = this.items[i];
+                            if (mouseX_cm >= it.x && mouseX_cm <= it.x + it.w &&
+                                mouseY_cm >= it.y && mouseY_cm <= it.y + it.h) {
+                                hovered = true;
+                                break;
+                            }
+                        }
+                        canvas.style.cursor = hovered ? 'grab' : 'crosshair';
+                        return;
+                    }
+
+                    canvas.style.cursor = 'grabbing';
+                    if (this.selectedItemIndex === -1 || !this.items[this.selectedItemIndex]) return;
+
+                    this.items[this.selectedItemIndex].x = Math.round((mouseX_cm - this.dragStartX) * 100) / 100;
+                    this.items[this.selectedItemIndex].y = Math.round((mouseY_cm - this.dragStartY) * 100) / 100;
+                    
+                    this.updateSelectedItemUI();
+                    this.redrawCanvas();
+                });
+
+                window.addEventListener('mouseup', () => {
+                    if (this.isDragging) {
+                        this.isDragging = false;
+                        if (canvas) canvas.style.cursor = 'grab';
+                    }
+                });
+            }
+
+            moveSelectedDirection(direction) {
+                if (this.selectedItemIndex === -1 || !this.items[this.selectedItemIndex]) return;
+                const step = parseFloat(document.getElementById('moveStep').value) || 0.1;
+                let item = this.items[this.selectedItemIndex];
+
+                if (direction === 'up') item.y = Math.max(0, Math.round((item.y - step) * 100) / 100);
+                if (direction === 'down') item.y = Math.round((item.y + step) * 100) / 100;
+                if (direction === 'left') item.x = Math.max(0, Math.round((item.x - step) * 100) / 100);
+                if (direction === 'right') item.x = Math.round((item.x + step) * 100) / 100;
+
+                this.updateSelectedItemUI();
+                this.redrawCanvas();
+            }
+
+            toggleSidebar() {
+                const sidebar = document.getElementById('mainSidebar');
+                const toggleText = document.getElementById('toggleSidebarText');
+                
+                this.sidebarOpen = !this.sidebarOpen;
+                
+                if (window.innerWidth < 768) {
+                    sidebar.classList.toggle('-translate-x-full');
+                } else {
+                    if (this.sidebarOpen) {
+                        sidebar.classList.remove('w-0', 'opacity-0');
+                        sidebar.classList.add('w-80', 'sm:w-96', 'md:translate-x-0');
+                        toggleText.innerText = "Ocultar Panel";
+                    } else {
+                        sidebar.classList.remove('w-80', 'sm:w-96', 'md:translate-x-0');
+                        sidebar.classList.add('w-0', 'opacity-0');
+                        toggleText.innerText = "Mostrar Panel";
+                    }
+                }
+            }
+
+            switchTab(tab) {
+                ['upload', 'grid', 'manual'].forEach(t => {
+                    document.getElementById(`tab-${t}`).className = "flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center justify-center gap-1.5 transition cursor-pointer";
+                    document.getElementById(`panel-${t}`).classList.add('hidden');
+                });
+                document.getElementById(`tab-${tab}`).className = "flex-1 py-3 text-xs font-semibold uppercase tracking-wider text-blue-400 border-b-2 border-blue-500 flex items-center justify-center gap-1.5 transition cursor-pointer";
+                document.getElementById(`panel-${tab}`).classList.remove('hidden');
+
+                if (window.innerWidth < 768) {
+                    document.getElementById('mainSidebar').classList.add('-translate-x-full');
+                }
+            }
+
+            setOrientation(orient) {
+                this.orientation = orient;
+                const pBtn = document.getElementById('orientPortrait');
+                const lBtn = document.getElementById('orientLandscape');
+                const wInput = document.getElementById('customSheetW');
+                const hInput = document.getElementById('customSheetH');
+                const curW = parseFloat(wInput.value);
+                const curH = parseFloat(hInput.value);
+
+                if (orient === 'portrait') {
+                    pBtn.className = "px-3 py-1 text-xs rounded bg-blue-600 text-white font-medium transition cursor-pointer";
+                    lBtn.className = "px-3 py-1 text-xs rounded text-slate-400 hover:text-white transition cursor-pointer";
+                    if (curW > curH) { wInput.value = curH; hInput.value = curW; }
+                } else {
+                    lBtn.className = "px-3 py-1 text-xs rounded bg-blue-600 text-white font-medium transition cursor-pointer";
+                    pBtn.className = "px-3 py-1 text-xs rounded text-slate-400 hover:text-white transition cursor-pointer";
+                    if (curW < curH) { wInput.value = curH; hInput.value = curW; }
+                }
+                this.redrawCanvas();
+            }
+
+            loadImageFile(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.imageObj = img;
+                        this.originalCanvas.width = img.width;
+                        this.originalCanvas.height = img.height;
+                        const ctx = this.originalCanvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+
+                        document.getElementById('enhancementSection').classList.remove('opacity-50', 'pointer-events-none');
+                        document.getElementById('exportBtn').removeAttribute('disabled');
+                        
+                        const defaultW = 5.0;
+                        const ratio = img.height / img.width;
+                        document.getElementById('itemWidth').value = defaultW;
+                        document.getElementById('itemHeight').value = Math.round(defaultW * ratio * 100) / 100;
+
+                        document.getElementById('canvasInfoText').innerText = `Imagen: ${file.name} (${img.width}x${img.height} px)`;
+                        
+                        this.processImage();
+                        this.generateGrid();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+
+            resetFilters() {
+                document.getElementById('sharpnessRange').value = 0;
+                document.getElementById('sharpnessVal').innerText = '0%';
+                document.getElementById('smoothRange').value = 0;
+                document.getElementById('smoothVal').innerText = '0%';
+                document.getElementById('contrastRange').value = 100;
+                document.getElementById('contrastVal').innerText = '100%';
+                document.getElementById('bwToggle').checked = false;
+                this.processImage();
+                this.redrawCanvas();
+            }
+
+            processImage() {
+                if (!this.imageObj) return;
+                const w = this.originalCanvas.width;
+                const h = this.originalCanvas.height;
+                this.processedCanvas.width = w;
+                this.processedCanvas.height = h;
+                const pCtx = this.processedCanvas.getContext('2d');
+
+                pCtx.clearRect(0, 0, w, h);
+                pCtx.drawImage(this.originalCanvas, 0, 0);
+
+                const contrast = document.getElementById('contrastRange').value;
+                const bw = document.getElementById('bwToggle').checked;
+                
+                let filterStr = `contrast(${contrast}%)`;
+                if (bw) filterStr += ' grayscale(100%) brightness(1.1)';
+                pCtx.filter = filterStr;
+                pCtx.drawImage(this.processedCanvas, 0, 0);
+                pCtx.filter = 'none';
+
+                const sharpness = parseInt(document.getElementById('sharpnessRange').value);
+                if (sharpness > 0) this.applySharpenFilter(pCtx, w, h, sharpness / 100.0);
+
+                const smooth = parseInt(document.getElementById('smoothRange').value);
+                if (smooth > 0) this.applySmoothFilter(pCtx, w, h, smooth / 100.0);
+            }
+
+            applySharpenFilter(ctx, width, height, amount) {
+                const imgData = ctx.getImageData(0, 0, width, height);
+                const data = imgData.data;
+                const w = width;
+                const h = height;
+                const copy = new Uint8ClampedArray(data);
+                for (let y = 1; y < h - 1; y++) {
+                    for (let x = 1; x < w - 1; x++) {
+                        let idx = (y * w + x) * 4;
+                        for (let c = 0; c < 3; c++) {
+                            let sum = 
+                                copy[((y-1)*w + x)*4 + c] * (-amount) +
+                                copy[(y*w + (x-1))*4 + c] * (-amount) +
+                                copy[(y*w + x)*4 + c] * (1 + 4*amount) +
+                                copy[(y*w + (x+1))*4 + c] * (-amount) +
+                                copy[((y+1)*w + x)*4 + c] * (-amount);
+                            data[idx + c] = Math.min(255, Math.max(0, sum));
+                        }
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }
+
+            applySmoothFilter(ctx, width, height, amount) {
+                ctx.save();
+                ctx.globalAlpha = amount * 0.5;
+                ctx.filter = 'blur(1px)';
+                ctx.drawImage(ctx.canvas, 0, 0);
+                ctx.restore();
+            }
+
+            generateGrid() {
+                if (!this.imageObj) return;
+                const sheetW_cm = parseFloat(document.getElementById('customSheetW').value) || 21.59;
+                const sheetH_cm = parseFloat(document.getElementById('customSheetH').value) || 27.94;
+                const itemW_cm = parseFloat(document.getElementById('itemWidth').value) || 5.0;
+                const itemH_cm = parseFloat(document.getElementById('itemHeight').value) || 5.0;
+                const margin_cm = parseFloat(document.getElementById('marginSheet').value) || 1.0;
+                const gap_cm = parseFloat(document.getElementById('itemGap').value) || 0.3;
+
+                const availableW = sheetW_cm - (margin_cm * 2);
+                const availableH = sheetH_cm - (margin_cm * 2);
+
+                const cols = Math.floor((availableW + gap_cm) / (itemW_cm + gap_cm));
+                const rows = Math.floor((availableH + gap_cm) / (itemH_cm + gap_cm));
+
+                this.items = [];
+                if (cols > 0 && rows > 0) {
+                    const gridW_cm = (cols * itemW_cm) + ((cols - 1) * gap_cm);
+                    const gridH_cm = (rows * itemH_cm) + ((rows - 1) * gap_cm);
+                    const startX_cm = (sheetW_cm - gridW_cm) / 2;
+                    const startY_cm = (sheetH_cm - gridH_cm) / 2;
+
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            this.items.push({
+                                x: Math.round((startX_cm + c * (itemW_cm + gap_cm)) * 100) / 100,
+                                y: Math.round((startY_cm + r * (itemH_cm + gap_cm)) * 100) / 100,
+                                w: itemW_cm,
+                                h: itemH_cm,
+                                rotation: 0
+                            });
+                        }
+                    }
+                }
+                this.selectedItemIndex = -1;
+                this.redrawCanvas();
+            }
+
+            addSingleItem() {
+                if (!this.imageObj) return;
+                const sheetW_cm = parseFloat(document.getElementById('customSheetW').value) || 21.59;
+                const sheetH_cm = parseFloat(document.getElementById('customSheetH').value) || 27.94;
+                const itemW_cm = parseFloat(document.getElementById('itemWidth').value) || 5.0;
+                const itemH_cm = parseFloat(document.getElementById('itemHeight').value) || 5.0;
+
+                this.items.push({
+                    x: Math.round((sheetW_cm - itemW_cm) / 2 * 100) / 100,
+                    y: Math.round((sheetH_cm - itemH_cm) / 2 * 100) / 100,
+                    w: itemW_cm,
+                    h: itemH_cm,
+                    rotation: 0
+                });
+                this.selectedItemIndex = this.items.length - 1;
+                this.updateSelectedItemUI();
+                this.redrawCanvas();
+            }
+
+            cloneSelected() {
+                if (this.selectedItemIndex === -1 || !this.items[this.selectedItemIndex]) return;
+                const it = this.items[this.selectedItemIndex];
+                const newItem = {
+                    x: Math.min(parseFloat(document.getElementById('customSheetW').value) - it.w, it.x + 0.5),
+                    y: Math.min(parseFloat(document.getElementById('customSheetH').value) - it.h, it.y + 0.5),
+                    w: it.w,
+                    h: it.h,
+                    rotation: it.rotation
+                };
+                this.items.push(newItem);
+                this.selectedItemIndex = this.items.length - 1;
+                this.updateSelectedItemUI();
+                this.redrawCanvas();
+            }
+
+            rotateSelected(deg) {
+                if (this.selectedItemIndex === -1 || !this.items[this.selectedItemIndex]) return;
+                let rot = (this.items[this.selectedItemIndex].rotation + deg) % 360;
+                if (rot < 0) rot += 360;
+                this.items[this.selectedItemIndex].rotation = rot;
+                document.getElementById('selRotation').value = rot;
+                document.getElementById('selRotVal').innerText = rot + '°';
+                this.redrawCanvas();
+            }
+
+            deleteSelected() {
+                if (this.selectedItemIndex === -1) return;
+                this.items.splice(this.selectedItemIndex, 1);
+                this.selectedItemIndex = -1;
+                document.getElementById('selectedItemControls').classList.add('opacity-50', 'pointer-events-none');
+                this.redrawCanvas();
+            }
+
+            clearAllItems() {
+                this.items = [];
+                this.selectedItemIndex = -1;
+                document.getElementById('selectedItemControls').classList.add('opacity-50', 'pointer-events-none');
+                this.redrawCanvas();
+            }
+
+            updateSelectedItemUI() {
+                if (this.selectedItemIndex === -1 || !this.items[this.selectedItemIndex]) {
+                    document.getElementById('selectedItemControls').classList.add('opacity-50', 'pointer-events-none');
+                    return;
+                }
+                document.getElementById('selectedItemControls').classList.remove('opacity-50', 'pointer-events-none');
+                const it = this.items[this.selectedItemIndex];
+                document.getElementById('selX').value = it.x;
+                document.getElementById('selY').value = it.y;
+                document.getElementById('selW').value = it.w;
+                document.getElementById('selH').value = it.h;
+                document.getElementById('selRotation').value = it.rotation;
+                document.getElementById('selRotVal').innerText = it.rotation + '°';
+            }
+
+            redrawCanvas() {
+                if (!this.imageObj) return;
+
+                const sheetW_cm = parseFloat(document.getElementById('customSheetW').value) || 21.59;
+                const sheetH_cm = parseFloat(document.getElementById('customSheetH').value) || 27.94;
+                const showCrop = document.getElementById('showCropMarks').checked;
+                const showBorder = document.getElementById('showBorder').checked;
+
+                const pxPerCm = 37.795;
+                const sheetW_px = sheetW_cm * pxPerCm;
+                const sheetH_px = sheetH_cm * pxPerCm;
+
+                const sheetContainer = document.getElementById('sheetContainer');
+                sheetContainer.style.width = sheetW_px + 'px';
+                sheetContainer.style.height = sheetH_px + 'px';
+
+                document.getElementById('statCount').innerText = this.items.length;
+                document.getElementById('sheetDimInfo').innerText = `| Hoja: ${sheetW_cm}x${sheetH_cm} cm | Ítems: ${this.items.length}`;
+
+                let canvas = document.getElementById('renderCanvas');
+                canvas.width = sheetW_px;
+                canvas.height = sheetH_px;
+                canvas.classList.remove('hidden');
+                document.getElementById('emptyState').classList.add('hidden');
+
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, sheetW_px, sheetH_px);
+
+                this.items.forEach((it, idx) => {
+                    const x_px = it.x * pxPerCm;
+                    const y_px = it.y * pxPerCm;
+                    const w_px = it.w * pxPerCm;
+                    const h_px = it.h * pxPerCm;
+
+                    ctx.save();
+                    ctx.translate(x_px + w_px / 2, y_px + h_px / 2);
+                    ctx.rotate((it.rotation * Math.PI) / 180);
+                    ctx.drawImage(this.processedCanvas, -w_px / 2, -h_px / 2, w_px, h_px);
+
+                    if (showBorder || idx === this.selectedItemIndex) {
+                        ctx.strokeStyle = idx === this.selectedItemIndex ? '#3b82f6' : '#ef4444';
+                        ctx.lineWidth = idx === this.selectedItemIndex ? 2 : 1;
+                        if (idx !== this.selectedItemIndex) ctx.setLineDash([4, 2]);
+                        ctx.strokeRect(-w_px / 2, -h_px / 2, w_px, h_px);
+                        ctx.setLineDash([]);
+                    }
+                    ctx.restore();
+
+                    if (showCrop) {
+                        this.drawCropMarks(ctx, x_px, y_px, w_px, h_px, pxPerCm);
+                    }
+                });
+
+                this.applyZoom();
+            }
+
+            drawCropMarks(ctx, x, y, w, h, pxPerCm) {
+                const len = 0.3 * pxPerCm;
+                const off = 0.1 * pxPerCm;
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 0.75;
+
+                ctx.beginPath(); ctx.moveTo(x - off, y); ctx.lineTo(x - off - len, y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x, y - off); ctx.lineTo(x, y - off - len); ctx.stroke();
+
+                ctx.beginPath(); ctx.moveTo(x + w + off, y); ctx.lineTo(x + w + off + len, y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x + w, y - off); ctx.lineTo(x + w, y - off - len); ctx.stroke();
+
+                ctx.beginPath(); ctx.moveTo(x - off, y + h); ctx.lineTo(x - off - len, y + h); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x, y + h + off); ctx.lineTo(x, y + h + off + len); ctx.stroke();
+
+                ctx.beginPath(); ctx.moveTo(x + w + off, y + h); ctx.lineTo(x + w + off + len, y + h); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x + w, y + h + off); ctx.lineTo(x + w, y + h + off + len); ctx.stroke();
+            }
+
+            zoomIn() { this.zoom = Math.min(3, this.zoom + 0.25); this.applyZoom(); }
+            zoomOut() { this.zoom = Math.max(0.4, this.zoom - 0.25); this.applyZoom(); }
+            resetZoom() { this.zoom = 1; this.applyZoom(); }
+
+            applyZoom() {
+                const container = document.getElementById('sheetContainer');
+                container.style.transform = `scale(${this.zoom})`;
+                document.getElementById('zoomLevel').innerText = Math.round(this.zoom * 100) + '%';
+            }
+
+            showInfoModal() { document.getElementById('infoModal').classList.remove('hidden'); }
+            closeInfoModal() { document.getElementById('infoModal').classList.add('hidden'); }
+
+            exportPDF() {
+                if (!this.imageObj || this.items.length === 0) return;
+
+                const { jsPDF } = window.jspdf;
+                const sheetW_cm = parseFloat(document.getElementById('customSheetW').value) || 21.59;
+                const sheetH_cm = parseFloat(document.getElementById('customSheetH').value) || 27.94;
+                const showCrop = document.getElementById('showCropMarks').checked;
+                const showBorder = document.getElementById('showBorder').checked;
+
+                const orientation = sheetW_cm > sheetH_cm ? 'l' : 'p';
+                const pdf = new jsPDF({
+                    orientation: orientation,
+                    unit: 'cm',
+                    format: [sheetW_cm, sheetH_cm]
+                });
+
+                const imgDataUrl = this.processedCanvas.toDataURL('image/png', 1.0);
+
+                this.items.forEach(it => {
+                    pdf.addImage(imgDataUrl, 'PNG', it.x, it.y, it.w, it.h);
+
+                    if (showBorder) {
+                        pdf.setDrawColor(239, 68, 68);
+                        pdf.setLineWidth(0.01);
+                        pdf.setLineDash([0.1, 0.1], 0);
+                        pdf.rect(it.x, it.y, it.w, it.h);
+                        pdf.setLineDash([], 0);
+                    }
+
+                    if (showCrop) {
+                        const cLen = 0.3;
+                        const cOff = 0.1;
+                        pdf.setDrawColor(51, 65, 85);
+                        pdf.setLineWidth(0.02);
+                        
+                        pdf.line(it.x - cOff - cLen, it.y, it.x - cOff, it.y);
+                        pdf.line(it.x, it.y - cOff - cLen, it.x, it.y - cOff);
+
+                        pdf.line(it.x + it.w + cOff, it.y, it.x + it.w + cOff + cLen, it.y);
+                        pdf.line(it.x + it.w, it.y - cOff - cLen, it.x + it.w, it.y - cOff);
+
+                        pdf.line(it.x - cOff - cLen, it.y + it.h, it.x - cOff, it.y + it.h);
+                        pdf.line(it.x, it.y + it.h + cOff, it.x, it.y + it.h + cOff + cLen);
+
+                        pdf.line(it.x + it.w + cOff, it.y + it.h, it.x + it.w + cOff + cLen, it.y + it.h);
+                        pdf.line(it.x + it.w, it.y + it.h + cOff, it.x + it.w, it.y + it.h + cOff + cLen);
+                    }
+                });
+
+                pdf.save(`ImprentaPro_Manual_${sheetW_cm}x${sheetH_cm}cm.pdf`);
+            }
+        }
+
+        let app;
+        window.addEventListener('DOMContentLoaded', () => {
+            app = new ImprentaApp();
+        });
+    </script>
+</body>
+</html>
